@@ -19,7 +19,7 @@ from PIL import Image
 from scipy import ndimage
 import pandas as pd
 from sklearn.model_selection import train_test_split
-
+from sklearn import preprocessing
 
 %matplotlib inline
 plt.rcParams['figure.figsize'] = (5.0, 4.0) # set default size of plots
@@ -120,6 +120,9 @@ for i in X.columns:
 
 y = pd.to_numeric(y)
 
+X.info()
+
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.10, random_state=42)
 
 m_train = X_train.shape[0]
@@ -129,7 +132,9 @@ X_train_T = np.array(X_train.T)
 X_test_T = np.array(X_test.T)
 X_train_T.shape
 X_test_T.shape
-scale = 
+X_train_T = preprocessing.scale(X_train_T)
+X_test_T = preprocessing.scale(X_test_T)
+
 
 y_train_a = np.array(y_train.copy()).reshape(y_train.shape[0],1)
 y_train_a = np.array(y_train_a.T)
@@ -222,8 +227,7 @@ print("b1 = " + str(parameters["b1"]))
 print("W2 = " + str(parameters["W2"]))
 print("b2 = " + str(parameters["b2"]))
 
-del(parameters)
-len(layer_dims)
+len(parameters)
 # =============================================================================
 # FORWARD PROPAGATION
 # =============================================================================
@@ -283,7 +287,11 @@ def sigmoid(z):
     return s, cache
    
 # CHECK THAT IT WORKS    
-sigmoid(np.array([0,2])) 
+np.multiply(sigmoid(np.array([0,2])), 1)
+
+np.multiply(sigmoid(np.array([0,2])),(1-sigmoid(np.array([0]))))
+
+1 - sigmoid(0)
 
 # relu
 def relu(z):
@@ -349,21 +357,23 @@ def L_model_forward(X, parameters):
     """
     
     caches = []
-    L = len(parameters) # n of layers
+    print(parameters)
+    print(len(parameters))
+    L = len(parameters) // 2 # n of layers
     A = X
-    
+    print("L:" + str(L))
     for l in range(1,L):
+        print("l:" + str(l))
         A_prev = A
         A, cache = linear_activation_forward(A_prev, parameters["W" + str(l)], parameters["b" + str(l)], activation = "relu")
         caches.append(cache)
         
-    A, cache = linear_activation_forward(A, parameters["W" + str(L)], parameters["b" + str(L)], activation = "sigmoid")
+    AL, cache = linear_activation_forward(A, parameters["W" + str(L)], parameters["b" + str(L)], activation = "sigmoid")
     caches.append(cache)
     
-    assert (A.shape == (1, X.shape[1]))
+    assert (AL.shape == (1, X.shape[1]))
     return AL, caches
-
-    
+   
 # =============================================================================
 # COST FUNCTION
 # =============================================================================
@@ -426,28 +436,53 @@ def linear_backward(dZ, cache):
 # first calculate the derivatives of the activation functions
 # sigmoid
 def dsigmoid(z):
-    ds = np.multiply(sigmoid(z), (1 - sigmoid(z)))
+    
+    ds = np.multiply(1 / (1 + np.exp(-z)), (1 - (1 / (1 + np.exp(-z)))))
     
     return ds
 
+
 def sigmoid_backward(dA, activation_cache):
-    dZ = np.multiply(dA, dsigmoid(activation_cache["Z"]))
+    Z = activation_cache
+    ds = dsigmoid(Z)
+    dZ = np.multiply(dA, ds)
     
     return dZ
 
 # relu
-
+"""
 def drelu(z):
     if z <= 0:
         dr = 0
     elif z > 0:
         dr = 1
     return dr
+"""
 
+def drelu(z):
+    drl = []
+    for i in range(z.shape[0]):
+        for j in range(z.shape[1]):
+            if z[i,j] <= 0:
+                dr = 0
+                drl.append(dr)
+            elif z[i,j] > 0:
+                dr = 1
+                drl.append(dr)
+    drl = np.array(drl)
+    drl = drl.reshape(z.shape[0], z.shape[1])
+    
+    return drl
+    
+    
 def relu_backward(dA, activation_cache):
-    dZ = np.multiply(dA, drelu(activation_cache["Z"]))
+    dr = drelu(activation_cache)
+    dZ = np.multiply(dA, dr)
     
     return dZ
+
+
+drelu(np.array([[0, 1, 5, 1, -1]]))
 
 # linear_activation backward
 
@@ -539,7 +574,7 @@ def update_parameters(parameters, grads, learning_rate):
                   parameters["b" + str(l)] = ...
     """
     
-    L = len(parameters) 
+    L = len(parameters) //2
 
     for l in range(L):
         parameters["W" + str(l+1)] = parameters["W" + str(l+1)] - learning_rate * grads["dW" + str(l+1)]
@@ -582,7 +617,6 @@ def L_layer_model(X, Y, layers_dims, learning_rate = 0.0075, num_iterations = 30
 
         # Forward propagation: [LINEAR -> RELU]*(L-1) -> LINEAR -> SIGMOID.
         AL, caches = L_model_forward(X, parameters)
-        
         # Compute cost.
         cost = compute_cost(AL, Y)
     
@@ -613,9 +647,26 @@ def L_layer_model(X, Y, layers_dims, learning_rate = 0.0075, num_iterations = 30
 parameters = L_layer_model(X_train_T, y_train_a , layers_dims, num_iterations = 2500, print_cost = True)
 
 
+# define a function for predicting
 
-X_train_T.shape
+def predict(parameters, X):
+    
+    # Computes probabilities using forward propagation, and classifies to 0/1 using 0.5 as the threshold.
+    AL, cache = L_model_forward(X, parameters)
+    predictions = predictions_new = (AL > 0.5)
+    
+    return predictions
+
+pred_X = predict(parameters, X_train_T)
+pred_x_test = predict(parameters, X_test_T)
 
 
+print ('Accuracy: %d' % float((np.dot(y_train_a, pred_X.T) + np.dot(1-y_train_a,1-pred_X.T))/float(y_train_a.size)*100) + '%')
+
+print ('Accuracy: %d' % float((np.dot(y_test_a, pred_x_test.T) + np.dot(1-y_test_a,1-pred_x_test.T))/float(y_test_a.size)*100) + '%')
+
+13150/44845
+
+1445/4999
 
 
